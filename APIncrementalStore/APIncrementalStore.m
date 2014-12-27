@@ -120,18 +120,18 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
  Structure is as follows:
  
  {
- Entity1: 
-    {
-    objectUID: 
-        {
-        kAPNSManagedObjectIDKey: objectID,
-        kAPReferenceCountKey: referenceCount
-        },
-    {
-    objectUUID: {
-        kAPNSManagedObjectIDKey: objectID,
-        kAPReferenceCountKey: referenceCount
-        },
+ Entity1:
+ {
+ objectUID:
+ {
+ kAPNSManagedObjectIDKey: objectID,
+ kAPReferenceCountKey: referenceCount
+ },
+ {
+ objectUUID: {
+ kAPNSManagedObjectIDKey: objectID,
+ kAPReferenceCountKey: referenceCount
+ },
  ...
  },
  Entity2: {
@@ -243,7 +243,7 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
     if (!_syncQueue) {
         _syncQueue = [[NSOperationQueue alloc]init];
         [_syncQueue setName: @"APDiskCache Sync Queue"];
-        [_syncQueue setMaxConcurrentOperationCount: 1]; //Serial
+        //[_syncQueue setMaxConcurrentOperationCount: 1]; //Serial
     }
     return _syncQueue;
 }
@@ -269,15 +269,6 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
                                            localStoreFileName:self.diskCacheFileName];
     }
     return _diskCache;
-}
-
-
-- (NSMutableDictionary*) mapBetweenManagedObjectIDsAndObjectUIDByEntityName {
-    
-    if (!_mapBetweenManagedObjectIDsAndObjectUIDByEntityName) {
-        _mapBetweenManagedObjectIDsAndObjectUIDByEntityName = [NSMutableDictionary dictionary];
-    }
-    return _mapBetweenManagedObjectIDsAndObjectUIDByEntityName;
 }
 
 
@@ -524,7 +515,7 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
             break;
             
         default:
-             if (error) [NSError errorWithDomain:APIncrementalStoreErrorDomain code:APIncrementalStoreErrorUnknownRequestType userInfo:nil];
+            if (error) [NSError errorWithDomain:APIncrementalStoreErrorDomain code:APIncrementalStoreErrorUnknownRequestType userInfo:nil];
             break;
     }
     
@@ -619,8 +610,8 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
 }
 
 - (NSArray *) AP_fetchDictionary:(NSFetchRequest *)fetchRequest
-                withContext:(NSManagedObjectContext *)context
-                      error:(NSError * __autoreleasing *)error {
+                     withContext:(NSManagedObjectContext *)context
+                           error:(NSError * __autoreleasing *)error {
     
     if (AP_DEBUG_METHODS) { MLog() }
     
@@ -709,10 +700,21 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
 
 #pragma mark - NSIncrementalStore Subclass Optional Methods
 
-// Both managedObjectContextDidRegisterObjectsWithIDs: and managedObjectContextDidUnregisterObjectsWithIDs:
-// could be enhanced to implement what Apple call row cache.
-// However as we are relying on CoreData to provide us with the caching engine we don't need to investing time
-// here.
+/*******************************
+ // Both managedObjectContextDidRegisterObjectsWithIDs: and managedObjectContextDidUnregisterObjectsWithIDs:
+ // could be enhanced to implement what Apple call row cache.
+ // However as we are relying on CoreData to provide us with the caching we don't need to investing time
+ // here.
+ *******************************/
+
+- (NSMutableDictionary*) mapBetweenManagedObjectIDsAndObjectUIDByEntityName {
+    
+    if (!_mapBetweenManagedObjectIDsAndObjectUIDByEntityName) {
+        _mapBetweenManagedObjectIDsAndObjectUIDByEntityName = [NSMutableDictionary dictionary];
+    }
+    return _mapBetweenManagedObjectIDsAndObjectUIDByEntityName;
+}
+
 
 /*
  Once the incremental store registers a new managedObjectID we cache it and
@@ -722,7 +724,6 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
     
     if (AP_DEBUG_METHODS) {MLog()}
     
-    // [super managedObjectContextDidRegisterObjectsWithIDs:objectIDs];
     
     for (NSManagedObjectID *objectID in objectIDs) {
         id objectUID = [self referenceObjectForObjectID:objectID];
@@ -774,13 +775,15 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
             
         } else {
             
-             // Entry: {objectID: refereceCount}
-             // get existing entry and increment referece count by 1
+            // Entry: {objectID: refereceCount}
+            // get existing entry and increment referece count by 1
             
             NSMutableDictionary* objectUIDDictEntry = [objectIDsAndRefereceCountByObjectUID[objectUID]mutableCopy];
             
             if (!objectUIDDictEntry) {
-                if (AP_DEBUG_ERRORS) {ELog(@"Warning - Trying to unregister a not previously registered objectUID: %@ ", objectUID)}
+                // I believe there's a bug when a object is deleted.
+                // This method is called for deleted objects even for referece count == 0.
+                //if (AP_DEBUG_ERRORS) {ELog(@"Warning - Trying to unregister a not previously registered objectUID: %@ ", objectUID)}
                 continue;
             }
             
@@ -788,8 +791,8 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
             
             if ([referenceCount integerValue] == 1) {
                 
-                 // No context holds reference for this managedObjectID anymore,
-                 // we can remove it from objectIDsAndRefereceCountByObjectUUID
+                // No context holds reference for this managedObjectID anymore,
+                // we can remove it from objectIDsAndRefereceCountByObjectUUID
                 
                 [objectIDsAndRefereceCountByObjectUID removeObjectForKey:objectUID];
                 
@@ -837,79 +840,80 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
     
     if (AP_DEBUG_METHODS) { MLog()}
     
-    if ([self.syncQueue operationCount] == 0) {
-        
-        NSPersistentStoreCoordinator* syncPSC = [[NSPersistentStoreCoordinator alloc]initWithManagedObjectModel:self.modelPlusCacheProperties];
-        
-        NSString *currSysVer = [[UIDevice currentDevice] systemVersion];
-        if ([currSysVer compare:@"8" options:NSNumericSearch] != NSOrderedAscending) {
-            [syncPSC setValue:@"Sync Operation PSC" forKey:@"name"];
-        }
-        
-        NSDictionary *options = @{ NSMigratePersistentStoresAutomaticallyOption: @YES,
-                                   /*NSSQLitePragmasOption:@{@"journal_mode":@"DELETE"},*/
-                                   NSInferMappingModelAutomaticallyOption: @YES};
-        
-        NSURL *storeURL = [NSURL fileURLWithPath:[self.diskCache pathToLocalStore]];
-        
-        NSError *error = nil;
-        [syncPSC addPersistentStoreWithType:NSSQLiteStoreType
-                              configuration:nil URL:storeURL
-                                    options:options error:&error];
-        if (error) {
-            [NSException raise:APIncrementalStoreExceptionLocalCacheStore format:@"Error creating sqlite persistent store: %@", error];
-        }
-        
-       // APWebServiceSyncOperation* syncOperation = [[APParseJSONSyncOperation alloc]initWithMergePolicy:self.mergePolicy authenticatedParseUser:self.authenticatedUser persistentStoreCoordinator:syncPSC];
-        APWebServiceSyncOperation* syncOperation = [[APParseSyncOperation alloc]initWithMergePolicy:self.mergePolicy
-                                                                             authenticatedParseUser:self.authenticatedUser
-                                                                         persistentStoreCoordinator:syncPSC
-                                                                              sendPushNotifications:YES];
-        
-        NSString* username = [self.authenticatedUser valueForKey:@"username"];
-        [syncOperation setEnvID:[NSString stringWithFormat:@"%@-%@",self.diskCache.localStoreFileName,username]];
-        syncOperation.fullSync = allRemoteObjects;
-        
-        __weak  typeof(self) weakSelf = self;
-        
-        [syncOperation setPerObjectCompletionBlock:^(BOOL isRemote, NSString* entityName) {
-            
-            if (![NSThread isMainThread]) {
-                [NSException raise:APIncrementalStoreExceptionInconsistency format:@"It should be called in the main thread"];
-            
-            } else if (weakSelf ) {
-                NSString* userInfoKey = (isRemote) ? APNotificationNumberOfRemoteObjectsSyncedKey: APNotificationNumberOfLocalObjectsSyncedKey;
-                NSDictionary* userInfo = @{userInfoKey: @1, APNotificationObjectEntityNameKey:entityName};
-                [[NSNotificationCenter defaultCenter]postNotificationName:APNotificationStoreDidSyncObject object:weakSelf userInfo:userInfo];
-            }
-        }];
-        
-        
-        [syncOperation setSyncCompletionBlock:^(NSDictionary* mergedObjectsUIDsNestedByEntityName, NSError* operationError) {
-            
-            if (![NSThread isMainThread]) {
-                [NSException raise:APIncrementalStoreExceptionInconsistency format:@"It should be called in the main thread"];
-            } else if (weakSelf ) {
-                
-                NSMutableDictionary* syncResults = [NSMutableDictionary dictionaryWithCapacity:2];
-                if (mergedObjectsUIDsNestedByEntityName) {
-                    syncResults[APNotificationSyncedObjectsKey] = [weakSelf translateObjectUIDsToManagedObjectIDs:mergedObjectsUIDsNestedByEntityName];
-                }
-                if (operationError) {
-                    syncResults[APNotificationSyncErrorKey] = operationError;
-                }
-                
-                [[NSNotificationCenter defaultCenter]postNotificationName:APNotificationStoreDidFinishSync object:weakSelf userInfo:[syncResults copy]];
-                
-                weakSelf.syncing = NO;
-            }
-        }];
-        
-        [self.syncQueue addOperation:syncOperation];
-        
-    } else {
-        NSLog(@"Concurrent Syncs are not supported");
+    NSPersistentStoreCoordinator* syncPSC = [[NSPersistentStoreCoordinator alloc]initWithManagedObjectModel:self.modelPlusCacheProperties];
+    
+    NSString *currSysVer = [[UIDevice currentDevice] systemVersion];
+    if ([currSysVer compare:@"8" options:NSNumericSearch] != NSOrderedAscending) {
+        [syncPSC setValue:@"Sync Operation PSC" forKey:@"name"];
     }
+    
+    NSDictionary *options = @{ NSMigratePersistentStoresAutomaticallyOption: @YES,
+                               /*NSSQLitePragmasOption:@{@"journal_mode":@"DELETE"},*/
+                               NSInferMappingModelAutomaticallyOption: @YES};
+    
+    NSURL *storeURL = [NSURL fileURLWithPath:[self.diskCache pathToLocalStore]];
+    
+    NSError *error = nil;
+    [syncPSC addPersistentStoreWithType:NSSQLiteStoreType
+                          configuration:nil URL:storeURL
+                                options:options error:&error];
+    if (error) {
+        [NSException raise:APIncrementalStoreExceptionLocalCacheStore format:@"Error creating sqlite persistent store: %@", error];
+    }
+    
+    APWebServiceSyncOperation* syncOperation = [[APParseSyncOperation alloc]initWithMergePolicy:self.mergePolicy
+                                                                         authenticatedParseUser:self.authenticatedUser
+                                                                     persistentStoreCoordinator:syncPSC
+                                                                          sendPushNotifications:YES];
+    
+    NSString* username = [self.authenticatedUser valueForKey:@"username"];
+    [syncOperation setEnvID:[NSString stringWithFormat:@"%@-%@",self.diskCache.localStoreFileName,username]];
+    syncOperation.fullSync = allRemoteObjects;
+    
+    __weak  typeof(self) weakSelf = self;
+    
+    [syncOperation setPerObjectCompletionBlock:^(BOOL isRemote, NSString* entityName) {
+        
+        if (![NSThread isMainThread]) {
+            [NSException raise:APIncrementalStoreExceptionInconsistency format:@"It should be called in the main thread"];
+            
+        } else if (weakSelf ) {
+            NSString* userInfoKey = (isRemote) ? APNotificationNumberOfRemoteObjectsSyncedKey: APNotificationNumberOfLocalObjectsSyncedKey;
+            NSDictionary* userInfo = @{userInfoKey: @1, APNotificationObjectEntityNameKey:entityName};
+            [[NSNotificationCenter defaultCenter]postNotificationName:APNotificationStoreDidSyncObject object:weakSelf userInfo:userInfo];
+        }
+    }];
+    
+    
+    [syncOperation setSyncCompletionBlock:^(NSDictionary* mergedObjectsUIDsNestedByEntityName, NSError* operationError) {
+        
+        if (![NSThread isMainThread]) {
+            [NSException raise:APIncrementalStoreExceptionInconsistency format:@"It should be called in the main thread"];
+        } else if (weakSelf ) {
+            
+            NSMutableDictionary* syncResults = [NSMutableDictionary dictionaryWithCapacity:2];
+            if (mergedObjectsUIDsNestedByEntityName) {
+                syncResults[APNotificationSyncedObjectsKey] = [weakSelf translateObjectUIDsToManagedObjectIDs:mergedObjectsUIDsNestedByEntityName];
+            }
+            
+            if (operationError) syncResults[APNotificationSyncErrorKey] = operationError;
+            
+            [[NSNotificationCenter defaultCenter]postNotificationName:APNotificationStoreDidFinishSync object:weakSelf userInfo:[syncResults copy]];
+            
+            weakSelf.syncing = NO;
+        }
+    }];
+    
+    [self.syncQueue.operations enumerateObjectsUsingBlock:^(NSOperation* ongoingOperation, NSUInteger idx, BOOL *stop) {
+        if (!ongoingOperation.isExecuting) {
+            [ongoingOperation cancel];
+        } else {
+            [syncOperation addDependency:ongoingOperation];
+            NSLog(@"New sync operation queued");
+        }
+    }];
+    
+    [self.syncQueue addOperation:syncOperation];
 }
 
 /*
@@ -991,12 +995,12 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
         }
         
     } else {
-        /*
-         After created it will call managedObjectContextDidRegisterObjectsWithIDs:
-         then we have the oportunity cache it in self.mapBetweenObjectIDsAndObjectUIDByEntityName
-         */
+        
+        // After created it will call managedObjectContextDidRegisterObjectsWithIDs:
+        // then we have the oportunity cache it in self.mapBetweenObjectIDsAndObjectUIDByEntityName
         managedObjectID = [self newObjectIDForEntity:entityDescription referenceObject:objectUID];
     }
+    
     return managedObjectID;
 }
 

@@ -17,6 +17,7 @@ typedef NS_ENUM(NSInteger, APMergePolicy) {
 @interface APWebServiceSyncOperation : NSOperation
 
 /**
+ @param policy one of defined APMergePolicy options
  @param user An already authenticated user
  @param policy One of the defined APMergePolicy options
  */
@@ -26,8 +27,7 @@ typedef NS_ENUM(NSInteger, APMergePolicy) {
 
 @property (nonatomic, copy) NSString* envID;
 
-/// Default is APMergePolicyServerWins
-@property (nonatomic, assign) APMergePolicy mergePolicy;
+@property (nonatomic, readonly) APMergePolicy mergePolicy;
 
 @property (nonatomic, copy) void (^perObjectCompletionBlock) (BOOL isRemote, NSString* entityName);
 
