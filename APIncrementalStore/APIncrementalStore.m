@@ -146,6 +146,10 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
  ...
  }
  */
+
+//pushNotification set it to YES if you want that a PFPush be sent out with a @{@"content-available":@"1"} whenever a local object is synced with Parse.
+#define kSendOutPushNotifications NO
+
 @property (nonatomic, strong) NSMutableDictionary *mapBetweenManagedObjectIDsAndObjectUIDByEntityName;
 
 @end
@@ -864,7 +868,7 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
     APWebServiceSyncOperation* syncOperation = [[APParseSyncOperation alloc]initWithMergePolicy:self.mergePolicy
                                                                          authenticatedParseUser:self.authenticatedUser
                                                                      persistentStoreCoordinator:syncPSC
-                                                                          sendPushNotifications:YES];
+                                                                          sendPushNotifications:kSendOutPushNotifications];
     
     NSString* username = [self.authenticatedUser valueForKey:@"username"];
     [syncOperation setEnvID:[NSString stringWithFormat:@"%@-%@",self.diskCache.localStoreFileName,username]];
