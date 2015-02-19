@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-
+#import <Parse/Parse.h>
 #import "APIncrementalStore.h"
 
 #import "APDiskCache.h"
@@ -174,9 +174,16 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
         if (AP_DEBUG_METHODS) { MLog(@"%@",self) }
         
         _authenticatedUser = [options valueForKey:APOptionAuthenticatedUserObjectKey];
-        if (!_authenticatedUser) {
-            if (AP_DEBUG_ERRORS) {ELog(@"Authenticated user is not set")}
-            return nil;
+
+        //don't require the user to login
+        if (!_authenticatedUser)
+        {
+            if (AP_DEBUG_ERRORS)
+            {
+                ELog(@"Authenticated user is not set")
+            }
+            
+            //     return nil;
         }
         _mergePolicy = [[options valueForKey:APOptionMergePolicyKey] integerValue];
         _syncOnSave = [options valueForKey:APOptionSyncOnSaveKey] ? [[options valueForKey:APOptionSyncOnSaveKey]boolValue] : YES;
@@ -187,7 +194,8 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
         // There will be one sqlite store file for each user. The file name will be <username>-<APOptionCacheFileNameKey>
         // ie: flavio-apincrementalstorediskcache.sqlite
         NSString* diskCacheFileNameSuffix = [@"-" stringByAppendingString:[options valueForKey:APOptionCacheFileNameKey] ?: APDefaultLocalCacheFileName];
-        NSString* username = [_authenticatedUser valueForKey:@"username"];
+        // NSString* username =  [_authenticatedUser valueForKey:@"username"];
+        NSString* username =  @"default";
         _diskCacheFileName = [username stringByAppendingString: diskCacheFileNameSuffix];
         
         [self registerForNotifications];
@@ -843,7 +851,12 @@ static NSString* const APReferenceCountKey = @"APReferenceCountKey";
 - (void) syncLocalCacheAllRemoteObjects:(BOOL) allRemoteObjects {
     
     if (AP_DEBUG_METHODS) { MLog()}
-    
+        
+    //TODO: mo -> fix this
+    if (self.authenticatedUser == nil) {
+        self.authenticatedUser = [PFUser currentUser];
+    }
+ 
     NSPersistentStoreCoordinator* syncPSC = [[NSPersistentStoreCoordinator alloc]initWithManagedObjectModel:self.modelPlusCacheProperties];
     
     NSString *currSysVer = [[UIDevice currentDevice] systemVersion];
